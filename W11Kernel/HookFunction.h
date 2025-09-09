@@ -25,7 +25,10 @@ typedef struct HOOKSTRUCT
     int SSDTindex;
     LONG SSDTold;
     LONG SSDTnew;
-    ULONG_PTR SSDTaddress;
+    PLONG SSDTOffsetPointer;
+    ULONG_PTR SSDTFunctionAddress;
 }HOOK, * PHOOK;
 
+extern PHOOK hook;
 
+void AllocateHookStruct(ULONG_PTR addr);

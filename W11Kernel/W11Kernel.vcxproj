@@ -124,21 +124,32 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Comm.c" />
+    <ClCompile Include="Disguise.c" />
     <ClCompile Include="DriverEntry.c" />
     <ClCompile Include="HookFunction.h" />
     <ClCompile Include="HookFunction.c" />
+    <ClCompile Include="WorkerThread.c" />
     <ClCompile Include="ModuleBase.c" />
     <ClCompile Include="PatternScan.c" />
     <ClCompile Include="ShadowSSDT.c" />
+    <ClCompile Include="SharedMemory.c" />
     <ClCompile Include="Util.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Comm.h" />
+    <ClInclude Include="Disguise.h" />
+    <ClInclude Include="Encrypt.h" />
+    <ClInclude Include="JunkCode.h" />
     <ClInclude Include="KernelIncludes.h" />
+    <ClInclude Include="WorkerThread.h" />
     <ClInclude Include="ModuleBase.h" />
     <ClInclude Include="PatternScan.h" />
     <ClInclude Include="ShadowSSDT.h" />
+    <ClInclude Include="SharedMemory.h" />
     <ClInclude Include="Util.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="JunkCode.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

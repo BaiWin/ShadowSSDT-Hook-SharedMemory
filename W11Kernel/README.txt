@@ -54,8 +54,26 @@ db fffff806`d3000000 L100
 
 find nop
 
-4EE7FD
+LEARNING URL：https://m0uk4.gitbook.io/notebooks/mouka/windowsinternal/ssdt-hook
 
-b7600000
+目标	SSDT Hooking	Shadow SSDT Hooking
+目标模块	ntoskrnl.exe	win32k.sys
+函数类型	内核系统调用	GUI系统调用
+Shellcode位置	ntoskrnl模块内	win32k模块内
+示例函数	NtQuerySystemInformation	NtUserCreateWindowEx
 
 
+0:082> u win32u!NtUserGetListBoxInfo
+win32u!NtUserGetListBoxInfo:
+00007fff`8c7c9c30 4c8bd1          mov     r10,rcx
+00007fff`8c7c9c33 b84d140000      mov     eax,144Dh
+00007fff`8c7c9c38 f604250803fe7f01 test    byte ptr [SharedUserData+0x308 (00000000`7ffe0308)],1
+00007fff`8c7c9c40 7503            jne     win32u!NtUserGetListBoxInfo+0x15 (00007fff`8c7c9c45)
+00007fff`8c7c9c42 0f05            syscall
+00007fff`8c7c9c44 c3              ret
+00007fff`8c7c9c45 cd2e            int     2Eh
+00007fff`8c7c9c47 c3              ret
+
+-----------------------------
+windbg设置调试显示输出： 
+ed nt!Kd_Default_Mask 0xFFFFFFFF

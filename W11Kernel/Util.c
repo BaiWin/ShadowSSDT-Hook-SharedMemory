@@ -1,28 +1,106 @@
 #include "KernelIncludes.h"
 
-NTSTATUS SuperCopyMemory(
-    IN VOID UNALIGNED* Destination,
-    IN CONST VOID UNALIGNED* Source,
-    IN ULONG Length)
+KSPIN_LOCK g_ssdtLock;
+
+NTSTATUS MmSafeCopyMemoryForNonPaged(
+    IN PVOID Destination,
+    IN CONST PVOID Source,
+    IN SIZE_T Length
+)
 {
-    //Change memory properties.
-    PMDL g_pmdl = IoAllocateMdl(Destination, Length, 0, 0, NULL);
-    if (!g_pmdl)
-        return STATUS_UNSUCCESSFUL;
-    MmBuildMdlForNonPagedPool(g_pmdl);
-    unsigned int* Mapped = (unsigned int*)MmMapLockedPages(g_pmdl, KernelMode);
-    if (!Mapped)
+    PMDL mdl = NULL;
+    PVOID mapped = NULL;
+    NTSTATUS status = STATUS_SUCCESS;
+    KIRQL oldIrql = PASSIVE_LEVEL;
+
+    if (!Destination || !Source || Length == 0)
     {
-        IoFreeMdl(g_pmdl);
-        return STATUS_UNSUCCESSFUL;
+        return STATUS_INVALID_PARAMETER;
     }
-    KIRQL kirql = KeRaiseIrqlToDpcLevel();
-    RtlCopyMemory(Mapped, Source, Length);
-    KeLowerIrql(kirql);
-    //Restore memory properties.
-    MmUnmapLockedPages((PVOID)Mapped, g_pmdl);
-    IoFreeMdl(g_pmdl);
-    return STATUS_SUCCESS;
+
+    __try
+    {
+        // 1) 分配 MDL 描述目标地址（注意：Destination 为内核 nonpaged 地址）
+        mdl = IoAllocateMdl(Destination, (ULONG)Length, FALSE, FALSE, NULL);
+        if (!mdl)
+        {
+            DbgPrint("MmSafeCopyMemoryForNonPaged: IoAllocateMdl failed\n");
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            __leave;
+        }
+
+        // 2) 针对非分页池直接 build MDL（不要 MmProbeAndLockPages）
+        MmBuildMdlForNonPagedPool(mdl);
+
+        // 3) 在低 IRQL 映射此 MDL（必须在 <= APC_LEVEL）
+        mapped = MmMapLockedPagesSpecifyCache(
+            mdl,
+            KernelMode,
+            MmNonCached,
+            NULL,
+            FALSE,
+            NormalPagePriority
+        );
+        if (!mapped)
+        {
+            DbgPrint("MmSafeCopyMemoryForNonPaged: MmMapLockedPagesSpecifyCache failed\n");
+            status = STATUS_UNSUCCESSFUL;
+            __leave;
+        }
+
+        // 4) 如果你担心并发读取表项（推荐），提升到 DPC 级别做短小写入
+        oldIrql = KeRaiseIrqlToDpcLevel();
+
+        // 5) 实际写入（短小、原子）
+        RtlCopyMemory(mapped, Source, Length);
+
+        // 6) 恢复 IRQL
+        KeLowerIrql(oldIrql);
+
+        status = STATUS_SUCCESS;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        status = GetExceptionCode();
+        DbgPrint("MmSafeCopyMemoryForNonPaged: exception 0x%X\n", status);
+    }
+
+    // 7) 清理（注意：在低 IRQL 下解除映射和释放 MDL）
+    if (mapped)
+    {
+        // MmUnmapLockedPages 要在 <= APC_LEVEL
+        MmUnmapLockedPages(mapped, mdl);
+        mapped = NULL;
+    }
+
+    if (mdl)
+    {
+        IoFreeMdl(mdl);
+        mdl = NULL;
+    }
+
+    return status;
+}
+
+NTSTATUS MmSafeCopyMemoryEx(
+    IN PVOID Destination,
+    IN CONST PVOID Source,
+    IN SIZE_T Length)
+{
+    KIRQL oldIrql;
+    NTSTATUS status;
+
+    if (!Destination || !Source || Length == 0)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    // 双重保护：spinlock + MmSafeCopyMemory内部的DPC提升
+    KeAcquireSpinLock(&g_ssdtLock, &oldIrql);
+    status = MmSafeCopyMemoryForNonPaged(Destination, Source, Length);
+    KeReleaseSpinLock(&g_ssdtLock, oldIrql);
+
+    return status;
 }
 
 
@@ -144,4 +222,57 @@ NTSTATUS GetProcessIdByName(OUT PHANDLE pPid, PCWSTR targetProcessName)
 
     ExFreePool(buffer);
     return STATUS_NOT_FOUND;
+}
+
+// Helper: RVA转文件偏移
+ULONG RvaToOffset(PIMAGE_NT_HEADERS NtHeaders, ULONG Rva, ULONG FileSize)
+{
+    PIMAGE_SECTION_HEADER Section = IMAGE_FIRST_SECTION(NtHeaders);
+    USHORT i;
+
+    for (i = 0; i < NtHeaders->FileHeader.NumberOfSections; i++)
+    {
+        ULONG SectionVA = Section[i].VirtualAddress;
+        ULONG SectionSize = Section[i].SizeOfRawData;
+
+        if (Rva >= SectionVA && Rva < SectionVA + SectionSize)
+        {
+            ULONG delta = Rva - SectionVA;
+            if (delta > Section[i].SizeOfRawData)
+            {
+                DbgPrint("RvaToOffset: delta > SizeOfRawData\n");
+                return ERROR_VALUE;
+            }
+            if (Section[i].PointerToRawData + delta > FileSize)
+            {
+                DbgPrint("RvaToOffset: Offset out of file size\n");
+                return ERROR_VALUE;
+            }
+
+            return Section[i].PointerToRawData + delta;
+        }
+    }
+    DbgPrint("RvaToOffset: No matching section found\n");
+    return ERROR_VALUE;
+}
+
+
+NTSTATUS MyProtectVirtualMemory(
+    IN OUT PVOID* BaseAddress,
+    IN OUT PSIZE_T RegionSize,
+    IN ULONG NewProtect,
+    OUT PULONG OldProtect)
+{
+    UNICODE_STRING funcName;
+    PFN_MmProtectVirtualMemory pfnMmProtectVirtualMemory;
+
+    RtlInitUnicodeString(&funcName, L"MmProtectVirtualMemory");
+    pfnMmProtectVirtualMemory = (PFN_MmProtectVirtualMemory)MmGetSystemRoutineAddress(&funcName);
+
+    if (pfnMmProtectVirtualMemory == NULL)
+    {
+        return STATUS_NOT_IMPLEMENTED;
+    }
+
+    return pfnMmProtectVirtualMemory(BaseAddress, RegionSize, NewProtect, OldProtect);
 }

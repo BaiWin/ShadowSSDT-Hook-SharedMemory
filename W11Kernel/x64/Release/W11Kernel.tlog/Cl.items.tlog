@@ -1,8 +1,11 @@
 C:\Users\57774\source\repos\W11Kernel\W11Kernel\Comm.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\Comm.obj
+C:\Users\57774\source\repos\W11Kernel\W11Kernel\Disguise.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\Disguise.obj
 C:\Users\57774\source\repos\W11Kernel\W11Kernel\DriverEntry.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\DriverEntry.obj
 C:\Users\57774\source\repos\W11Kernel\W11Kernel\HookFunction.h;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\HookFunction.obj
 C:\Users\57774\source\repos\W11Kernel\W11Kernel\HookFunction.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\HookFunction.obj
+C:\Users\57774\source\repos\W11Kernel\W11Kernel\WorkerThread.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\WorkerThread.obj
 C:\Users\57774\source\repos\W11Kernel\W11Kernel\ModuleBase.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\ModuleBase.obj
 C:\Users\57774\source\repos\W11Kernel\W11Kernel\PatternScan.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\PatternScan.obj
 C:\Users\57774\source\repos\W11Kernel\W11Kernel\ShadowSSDT.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\ShadowSSDT.obj
+C:\Users\57774\source\repos\W11Kernel\W11Kernel\SharedMemory.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\SharedMemory.obj
 C:\Users\57774\source\repos\W11Kernel\W11Kernel\Util.c;C:\Users\57774\source\repos\W11Kernel\W11Kernel\x64\Release\Util.obj

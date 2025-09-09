@@ -1,30 +1,19 @@
-﻿//#include <ntifs.h>
-#include "KernelIncludes.h"
+﻿#include <ntifs.h>
 
-extern NTSTATUS InitShadowSSDT();
-extern VOID UnhookShadowSSDT();
+extern NTSTATUS HookShadowSSDT();
+extern NTSTATUS UnhookShadowSSDT();
+extern NTSTATUS StartWorkerThread();
+extern NTSTATUS StopWorkerThread();
 
 VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 {
     UNREFERENCED_PARAMETER(DriverObject);
 
+    //UnhookShadowSSDT();
+    
+    // --------------------------------------------
 
-    PEPROCESS winlogonProcess = NULL;
-    HANDLE pid = NULL;
-    if (!NT_SUCCESS(GetProcessIdByName(&pid, L"winlogon.exe")))
-        return STATUS_UNSUCCESSFUL;
-
-    NTSTATUS status = PsLookupProcessByProcessId(pid, &winlogonProcess);
-    if (!NT_SUCCESS(status) || !winlogonProcess)
-        return STATUS_UNSUCCESSFUL;
-
-    KAPC_STATE apcState;
-    KeStackAttachProcess(winlogonProcess, &apcState);
-
-    UnhookShadowSSDT();
-
-    KeUnstackDetachProcess(&apcState);
-    ObDereferenceObject(winlogonProcess);
+    StopWorkerThread();
 
     DbgPrint("[W11Kernel] Driver unloaded\n");
 }
@@ -39,29 +28,11 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 
     DbgPrint("[W11Kernel] Driver loaded\n");
 
+    //HookShadowSSDT();
 
-    PEPROCESS winlogonProcess = NULL;
-    HANDLE pid = NULL;
-    if (!NT_SUCCESS(GetProcessIdByName(&pid, L"winlogon.exe")))
-    {
-        DbgPrint("[W11Kernel] Failed to find pid\n");
-        return STATUS_UNSUCCESSFUL;
-    }
-    NTSTATUS status = PsLookupProcessByProcessId(pid, &winlogonProcess);
-    if (!NT_SUCCESS(status) || !winlogonProcess)
-    {
-        DbgPrint("[W11Kernel] Failed to find winlogon.exe\n");
-        return STATUS_UNSUCCESSFUL;
-    }
+    // ------------------------------------------
 
-    KAPC_STATE apcState;
-    KeStackAttachProcess(winlogonProcess, &apcState);
-
-    InitShadowSSDT();
-
-    KeUnstackDetachProcess(&apcState);
-    ObDereferenceObject(winlogonProcess);
-
+    StartWorkerThread();
 
     return STATUS_SUCCESS;
 }

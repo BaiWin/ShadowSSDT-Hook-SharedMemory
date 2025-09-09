@@ -1,6 +1,8 @@
 #include "KernelIncludes.h"
 
-NTSTATUS MyNtQueryCompositionSurfaceStatistics()
+PHOOK hook = NULL;
+
+NTSTATUS MyNtUserGetListBoxInfo()
 {
     DbgPrint("[W11Kernel] NtQueryCompositionSurfaceStatistics was called!\n");
 
@@ -12,37 +14,20 @@ NTSTATUS MyNtQueryCompositionSurfaceStatistics()
     return STATUS_SUCCESS;
 }
 
-
-
-//VOID AttachToWinlogonAndHook()
-//{
-//    PEPROCESS targetProcess = NULL;
-//    HANDLE pid;
-//    KAPC_STATE apcState;
-//
-//    // 获取 winlogon.exe 的进程对象
-//    targetProcess = GetProcessByName("winlogon.exe");
-//    if (!targetProcess)
-//    {
-//        DbgPrint("[-] Cannot find winlogon.exe\n");
-//        return;
-//    }
-//
-//    // 附加到该进程
-//    KeStackAttachProcess(targetProcess, &apcState);
-//    DbgPrint("[+] Attached to winlogon.exe\n");
-//
-//    __try
-//    {
-//        // 在 winlogon.exe 的上下文中执行
-//        VOID PerformShadowSSDTx64Hook();  // 你可以在这里查找 Shadow SSDT 地址，或者访问用户空间
-//    }
-//    __except (EXCEPTION_EXECUTE_HANDLER)
-//    {
-//        DbgPrint("[-] Exception during hook logic\n");
-//    }
-//
-//    // 恢复到原来的进程上下文
-//    KeUnstackDetachProcess(&apcState);
-//    ObDereferenceObject(targetProcess);
-//}
+void AllocateHookStruct(ULONG_PTR addr)
+{
+    //allocate structure
+    hook = (PHOOK)ExAllocatePoolWithTag(NonPagedPool, sizeof(HOOK), 'kooH');
+    //set hooking address
+    //hook->addr = nopAddress;        // Store the cave address
+    hook->addr = addr;
+    //set hooking opcode
+#ifdef _WIN64
+    hook->hook.mov = 0xB848;
+#else
+    hook->hook.mov = 0xB8;
+#endif
+    hook->hook.addr = (ULONG_PTR)MyNtUserGetListBoxInfo;    // Insert our own function
+    hook->hook.push = 0x50;
+    hook->hook.ret = 0xc3;
+}

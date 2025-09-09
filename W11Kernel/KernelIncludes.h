@@ -18,4 +18,14 @@
 #include "PatternScan.h"
 #include "ShadowSSDT.h"
 #include "NtDllMapper.h"
+#include "SharedMemory.h"
+#include "WorkerThread.h"
+#include "Encrypt.h"
+#include "Disguise.h"
+#include "JunkCode.h"
+
+#define ERROR_VALUE 0xFFFFFFFF
+#define SHADOW_SSDT
+//#define SSDT
+#define WRITE_IN_GAP
 
