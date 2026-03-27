@@ -66,10 +66,23 @@ extern "C" {
             PULONG ReturnLength
         );                    //必须声明，虽然导出，但编译器需要签名。// 声明是为了告诉链接器“这个符号在运行时存在”
 
+    NTSYSAPI
+        NTSTATUS
+        NTAPI
+        NtQueryInformationProcess(
+            HANDLE ProcessHandle,
+            PROCESSINFOCLASS ProcessInformationClass,
+            PVOID ProcessInformation,
+            ULONG ProcessInformationLength,
+            PULONG ReturnLength
+        );
+
+    PPEB PsGetProcessPeb(PEPROCESS Process);
+
     /*NTSYSAPI
         NTSTATUS
         NTAPI
-        MmProtectVirtualMemory(
+        NtQueryInformationProcess(
             IN PVOID* BaseAddress,
             IN OUT PSIZE_T NumberOfBytes,
             IN ULONG NewProtect,

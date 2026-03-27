@@ -57,6 +57,12 @@
     <ClCompile Include="Disguise.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CR3Shuffling.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Local.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ShadowSSDT.h">
@@ -90,6 +96,15 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="JunkCode.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Debug.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CR3Shuffling.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Local.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -24,7 +24,7 @@ NTSTATUS MmSafeCopyMemoryForNonPaged(
         mdl = IoAllocateMdl(Destination, (ULONG)Length, FALSE, FALSE, NULL);
         if (!mdl)
         {
-            DbgPrint("MmSafeCopyMemoryForNonPaged: IoAllocateMdl failed\n");
+            DebugMessage("MmSafeCopyMemoryForNonPaged: IoAllocateMdl failed\n");
             status = STATUS_INSUFFICIENT_RESOURCES;
             __leave;
         }
@@ -43,7 +43,7 @@ NTSTATUS MmSafeCopyMemoryForNonPaged(
         );
         if (!mapped)
         {
-            DbgPrint("MmSafeCopyMemoryForNonPaged: MmMapLockedPagesSpecifyCache failed\n");
+            DebugMessage("MmSafeCopyMemoryForNonPaged: MmMapLockedPagesSpecifyCache failed\n");
             status = STATUS_UNSUCCESSFUL;
             __leave;
         }
@@ -62,7 +62,7 @@ NTSTATUS MmSafeCopyMemoryForNonPaged(
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
         status = GetExceptionCode();
-        DbgPrint("MmSafeCopyMemoryForNonPaged: exception 0x%X\n", status);
+        DebugMessage("MmSafeCopyMemoryForNonPaged: exception 0x%X\n", status);
     }
 
     // 7) 清理（注意：在低 IRQL 下解除映射和释放 MDL）
@@ -240,19 +240,19 @@ ULONG RvaToOffset(PIMAGE_NT_HEADERS NtHeaders, ULONG Rva, ULONG FileSize)
             ULONG delta = Rva - SectionVA;
             if (delta > Section[i].SizeOfRawData)
             {
-                DbgPrint("RvaToOffset: delta > SizeOfRawData\n");
+                DebugMessage("RvaToOffset: delta > SizeOfRawData\n");
                 return ERROR_VALUE;
             }
             if (Section[i].PointerToRawData + delta > FileSize)
             {
-                DbgPrint("RvaToOffset: Offset out of file size\n");
+                DebugMessage("RvaToOffset: Offset out of file size\n");
                 return ERROR_VALUE;
             }
 
             return Section[i].PointerToRawData + delta;
         }
     }
-    DbgPrint("RvaToOffset: No matching section found\n");
+    DebugMessage("RvaToOffset: No matching section found\n");
     return ERROR_VALUE;
 }
 

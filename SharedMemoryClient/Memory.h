@@ -33,7 +33,7 @@ inline int GetSequence()
 
 // 基础读取：绝对地址
 template<typename T>
-MemoryResult<T> ReadAbsolute(uintptr_t address, uintptr_t offset)
+MemoryResult<T> ReadAbsolute(uintptr_t address, uintptr_t offset = 0)
 {
 	int currentSeq = CommandSequenceGenerator();
 
@@ -115,7 +115,13 @@ void Write(const MemoryResult<uintptr_t>& base, uintptr_t offset, T value)
 	SendCommandToKernel(cmd, currentSeq);
 }
 
-MemoryResult<uintptr_t> GetModuleBase(int pid);
+int FillChunkToSize(int size);
+
+MemoryResult<uintptr_t> GetModuleBase(ULONG pid);
+
+MemoryResult<std::vector<uint8_t>> ReadBufferAbsolute(uintptr_t address, uintptr_t offset, ULONG dataSize);
+
+MemoryResult<std::vector<uint8_t>> ReadBuffer(const MemoryResult<uintptr_t>& base, uintptr_t offset, ULONG dataSize);
 
 DWORD GetProcessID(const wchar_t* processName);
 

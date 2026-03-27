@@ -9,7 +9,7 @@ NTSTATUS CopyShadowSSDTToStructure(PSHARED_MEMORY_DATA data)
 
     if (data == NULL)
     {
-        DbgPrint("[W11Kernel] Invalid parameter: data is NULL\n");
+        DebugMessage("[W11Kernel] Invalid parameter: data is NULL\n");
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -18,10 +18,10 @@ NTSTATUS CopyShadowSSDTToStructure(PSHARED_MEMORY_DATA data)
         g_KeServiceDescriptorTableShadow = (PSHARED_MEMORY_TABLE_SHADOW)FindKeServiceDescriptorTableShadow();  // win32k.sys
         if (g_KeServiceDescriptorTableShadow == NULL)
         {
-            DbgPrint("[W11Kernel] Failed to find KeServiceDescriptorTableShadow\n");
+            DebugMessage("[W11Kernel] Failed to find KeServiceDescriptorTableShadow\n");
             return STATUS_UNSUCCESSFUL;
         }
-        DbgPrint("[W11Kernel] KeServiceDescriptorTableShadow found at %p\n", g_KeServiceDescriptorTableShadow);
+        DebugMessage("[W11Kernel] KeServiceDescriptorTableShadow found at %p\n", g_KeServiceDescriptorTableShadow);
     }
 
     PSHARED_MEMORY_TABLE mainTable = &g_KeServiceDescriptorTableShadow->Table[0]; // SSDT
@@ -29,7 +29,7 @@ NTSTATUS CopyShadowSSDTToStructure(PSHARED_MEMORY_DATA data)
     if (mainTable == NULL || mainTable->ServiceTableBase == NULL ||
         shadowTable == NULL || shadowTable->ServiceTableBase == NULL)
     {
-        DbgPrint("[W11Kernel] MainTable or ShadowTable is invalid\n");
+        DebugMessage("[W11Kernel] MainTable or ShadowTable is invalid\n");
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -74,7 +74,7 @@ NTSTATUS CopyShadowSSDTToStructure(PSHARED_MEMORY_DATA data)
     data->DataSize = 0;*/
 
     // 清空 commandPacks 和 Buffer
-    RtlZeroMemory(data->commandPacks, sizeof(data->commandPacks));
+    //RtlZeroMemory(data->commandPacks, sizeof(data->commandPacks)); // 客户端先启动，所以不需要这个
     RtlZeroMemory(data->Buffer, sizeof(data->Buffer));
 
     // 防检测：模拟系统行为
@@ -82,7 +82,7 @@ NTSTATUS CopyShadowSSDTToStructure(PSHARED_MEMORY_DATA data)
         data->SystemTable.Table[1].NumberOfServices;
     UNREFERENCED_PARAMETER(dummy);
 
-    DbgPrint("[W11Kernel] SSDT copied: %lu services, Shadow SSDT copied: %lu services\n",
+    DebugMessage("[W11Kernel] SSDT copied: %lu services, Shadow SSDT copied: %lu services\n",
         data->SystemTable.Table[0].NumberOfServices,
         data->SystemTable.Table[1].NumberOfServices);
     return STATUS_SUCCESS;
@@ -101,7 +101,7 @@ NTSTATUS CopyShadowSSDTToStructure(PSHARED_MEMORY_DATA data)
 //    PLDR_DATA_TABLE_ENTRY ldrEntry = (PLDR_DATA_TABLE_ENTRY)DriverObject->DriverSection;
 //    if (ldrEntry == NULL)
 //    {
-//        DbgPrint("[W11Kernel] Failed to get LDR_DATA_TABLE_ENTRY\n");
+//        DebugMessage("[W11Kernel] Failed to get LDR_DATA_TABLE_ENTRY\n");
 //        return STATUS_UNSUCCESSFUL;
 //    }
 //

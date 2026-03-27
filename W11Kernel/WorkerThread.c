@@ -3,7 +3,7 @@
 
 const LARGE_INTEGER g_StateIntervals[2] = {
     {.QuadPart = -20000000 },   // 2秒
-    {.QuadPart = -10000000 }     // 0.1秒
+    {.QuadPart = -20000 }     // 0.02秒
 };
 
 // 全局变量
@@ -37,11 +37,11 @@ NTSTATUS StartWorkerThread()
     {
         g_bRunning = FALSE;
         g_hWorkerThread = NULL;
-        DbgPrint("Failed to create worker thread: 0x%X\n", status);
+        DebugMessage("Failed to create worker thread: 0x%X\n", status);
         return status;
     }
 
-    DbgPrint("Worker thread started\n");
+    DebugMessage("Worker thread started\n");
     return STATUS_SUCCESS;
 }
 
@@ -60,7 +60,7 @@ NTSTATUS StopWorkerThread()
     status = ZwWaitForSingleObject(g_hWorkerThread, FALSE, NULL);
     if (!NT_SUCCESS(status))
     {
-        DbgPrint("ZwWaitForSingleObject failed: 0x%X\n", status);
+        DebugMessage("ZwWaitForSingleObject failed: 0x%X\n", status);
     }
 
     // 关闭线程句柄
@@ -69,7 +69,7 @@ NTSTATUS StopWorkerThread()
 
     ReleaseSharedData();
 
-    DbgPrint("Worker thread stopped successfully.\n");
+    DebugMessage("Worker thread stopped successfully.\n");
 
     return STATUS_SUCCESS;
 }
@@ -121,7 +121,7 @@ VOID WorkerThreadRoutine(PVOID Context)
 
 VOID TransitionToState(CONNECTION_STATE newState)
 {
-    DbgPrint("State transition: %d -> %d\n", g_CurrentState, newState);
+    DebugMessage("State transition: %d -> %d\n", g_CurrentState, newState);
     g_CurrentState = newState;
     //g_CurrentInterval = g_StateIntervals[newState];
 }
@@ -147,10 +147,10 @@ LARGE_INTEGER AddRandomJitterSafe(LARGE_INTEGER baseInterval, int jitterPercent)
     }
 
     // 打印 baseInterval 原始值
-    DbgPrint("AddRandomJitterSafeFromTicks -> baseInterval.QuadPart=%lld\n", baseInterval.QuadPart);
+    DebugMessage("AddRandomJitterSafeFromTicks -> baseInterval.QuadPart=%lld\n", baseInterval.QuadPart);
 
     // 打印基准、扰动和最终结果
-    //DbgPrint("AddRandomJitterSafeFromTicks -> result=%lld (~%llu ms)\n", result.QuadPart, (unsigned long long)(-result.QuadPart / 10000));
+    //DebugMessage("AddRandomJitterSafeFromTicks -> result=%lld (~%llu ms)\n", result.QuadPart, (unsigned long long)(-result.QuadPart / 10000));
 
     return result;
 }

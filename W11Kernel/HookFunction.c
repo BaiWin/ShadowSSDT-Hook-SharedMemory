@@ -4,7 +4,7 @@ PHOOK hook = NULL;
 
 NTSTATUS MyNtUserGetListBoxInfo()
 {
-    DbgPrint("[W11Kernel] NtQueryCompositionSurfaceStatistics was called!\n");
+    DebugMessage("[W11Kernel] NtQueryCompositionSurfaceStatistics was called!\n");
 
     // 你可以在这里执行一些逻辑，比如触发通信、读取内存、检测等等
 

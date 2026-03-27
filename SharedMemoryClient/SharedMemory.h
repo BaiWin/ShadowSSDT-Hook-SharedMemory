@@ -1,5 +1,8 @@
 #pragma once
 #include "ClientIncludes.h"
+#include <type_traits>
+#include <vector>
+#include <cstdint>
 
 PSHARED_MEMORY_DATA InitializeSharedMemory();
 PSHARED_MEMORY_DATA GetSharedDataOnce();
@@ -22,15 +25,30 @@ T ProcessSingleResult(int* start, int size = sizeof(T))
 
     // 数据指针 = buffer + 偏移
     T value{};
-    memcpy(&value, buffer + *start, size);
+
+    if (size > 0)
+    {
+        if constexpr (std::is_same_v<T, std::vector<uint8_t>>)
+        {
+            // 对于 std::vector<uint8_t>，使用 data() 获取内存指针
+            value.resize(size);  // 确保 vector 足够大
+            memcpy(value.data(), buffer + *start, size);
+        }
+        else
+        {
+            // 对于其他基本类型，直接 memcpy
+            memcpy(&value, buffer + *start, size);
+        }
+        *start += size;  // 更新 start
+    }
 
     //printf("Reading from buffer + %d\n", *start);
-
-    // 消费掉的数据，移动 start 指针
-    *start += size;
 
     return value;
 }
 
+void IncrementStartBySize(int* start, int size);
+
+int FillSizeOfChunk(int size);
 
 void CleanupSharedMemory();

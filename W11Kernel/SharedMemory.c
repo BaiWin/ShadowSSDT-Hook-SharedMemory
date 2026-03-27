@@ -21,18 +21,18 @@ NTSTATUS TryConnectSharedMemory()
     PSHARED_MEMORY_DATA pSharedData = GetSharedDataOnce(); // 使用新的方法
     if (pSharedData == NULL)
     {
-        DbgPrint("Failed to get shared memory address\n");
+        DebugMessage("Failed to get shared memory address\n");
         return STATUS_OBJECT_NAME_NOT_FOUND;
     }
 
     // 验证共享内存结构
     if (pSharedData->Signature != EncryptedSignature(SHARED_MEMORY_SIGNATURE))
     {
-        DbgPrint("Invalid shared memory signature!\n");
+        DebugMessage("Invalid shared memory signature!\n");
         return STATUS_INVALID_SIGNATURE;
     }
 
-    DbgPrint("Shared memory successfully connected at: 0x%p\n", pSharedData);
+    DebugMessage("Shared memory successfully connected at: 0x%p\n", pSharedData);
 
     return STATUS_SUCCESS;
 }
@@ -45,13 +45,14 @@ NTSTATUS CheckAndProcessCommand()
     if (pSharedData == NULL)
     {
         InsertJunkCode(1);
+        DebugMessage("Return by ShareData null!\n");
         return STATUS_INVALID_ADDRESS;
     }
         
     InsertJunkCode(2);
     if (InterlockedCompareExchange(&pSharedData->Lock, 1, 0) == 1)
     {
-        DbgPrint("Return by lock!\n");
+        DebugMessage("Return by lock!\n");
         return STATUS_SUCCESS;
     }
 
@@ -60,7 +61,7 @@ NTSTATUS CheckAndProcessCommand()
     if (pSharedData->Signature != EncryptedSignature(SHARED_MEMORY_SIGNATURE))
     {
         InsertJunkCode(4);
-        DbgPrint("Invalid signature!\n");
+        DebugMessage("Invalid signature!\n");
         InterlockedExchange(&pSharedData->Lock, 0);
         return STATUS_INVALID_PARAMETER;
     }
@@ -75,7 +76,7 @@ NTSTATUS CheckAndProcessCommand()
     status = PsLookupProcessByProcessId((HANDLE)ClientPid, &clientProcess);
     if (!NT_SUCCESS(status) || clientProcess == NULL)
     {
-        DbgPrint("Failed to find client process: %lu (0x%X)\n", ClientPid, status);
+        DebugMessage("Failed to find client process: %lu (0x%X)\n", ClientPid, status);
         status = STATUS_SUCCESS; 
         goto Cleanup;
     }
@@ -83,7 +84,7 @@ NTSTATUS CheckAndProcessCommand()
     status = PsLookupProcessByProcessId((HANDLE)TargetPid, &targetProcess);
     if (!NT_SUCCESS(status) || targetProcess == NULL)
     {
-        DbgPrint("Failed to find target process: %lu (0x%X)\n", TargetPid, status);
+        DebugMessage("Failed to find target process: %lu (0x%X)\n", TargetPid, status);
         // 已成功获取 clientProcess，需要释放
         status = STATUS_SUCCESS;
         goto Cleanup; //客户端还没关闭，只是没传目标进程pid，依然返回成功
@@ -92,10 +93,10 @@ NTSTATUS CheckAndProcessCommand()
     // 写之前确保缓冲区正确
     currentWriteBufferIndex = (pSharedData->currentBufferIndex == 0) ? 1 : 0;
 
-    DecryptField((ULONG*) & pSharedData->CommandPackSize);
+    DecryptField((ULONG*)&pSharedData->CommandPackSize);
     if (pSharedData->CommandPackSize > MAX_COMMAND_COUNT)
     {
-        DbgPrint("[W11Kernel] Invalid CommandPackSize: %lu\n", pSharedData->CommandPackSize);
+        DebugMessage("[W11Kernel] Invalid CommandPackSize: %lu\n", pSharedData->CommandPackSize);
         status = STATUS_INVALID_PARAMETER;
         goto Cleanup;
     }
@@ -109,14 +110,26 @@ NTSTATUS CheckAndProcessCommand()
             BUFFER_SIZE
         );
 
+        DebugMessage("[W11Kernel] CommandPackSize: %lu\n", pSharedData->CommandPackSize);
         for (ULONG i = 0; i < pSharedData->CommandPackSize; i++)
         {
             COMMAND_PACKET cmd = pSharedData->commandPacks[i];
 
             DecryptCommandPack(&cmd);
 
+            DebugMessage("[W11Kernel] CMD Type: %lu\n", cmd.Type);
+            DebugMessage("[W11Kernel] CMD Address: 0x%p\n", (PVOID)cmd.Address);
+            DebugMessage("[W11Kernel] CMD Size: %lu\n", cmd.Size);
+
             // 处理单个命令
             writeOffset = ProcessReceivedCommand(clientProcess, targetProcess, &cmd, pSharedData, writeOffset, i);
+            DebugMessage("[W11Kernel] CurrentWriteOffset: %lu\n", writeOffset);
+        }
+
+        if (writeOffset > BUFFER_SIZE)
+        {
+            DebugMessage("[W11Kernel] WriteOffset Excced Max Size: %lu\n", writeOffset);
+            writeOffset = BUFFER_SIZE;
         }
 
         InsertJunkCodeRND();
@@ -131,10 +144,10 @@ NTSTATUS CheckAndProcessCommand()
 
         // 告诉客户端已经执行过了
         pSharedData->CommandPackSize = 0;
-        EncryptField((ULONG*)&pSharedData->CommandPackSize);
 
         currentWriteBufferIndex = (pSharedData->currentBufferIndex == 0) ? 1 : 0;  // 当前写的缓冲切换
     }
+    EncryptField((ULONG*)&pSharedData->CommandPackSize); // 上面DecryptField((ULONG*)&pSharedData->CommandPackSize);对应
 
 Cleanup:
     InsertJunkCodeRND();
@@ -159,23 +172,57 @@ ULONG ProcessReceivedCommand(
 
     UCHAR* buffer = pSharedData->Buffer[currentWriteBufferIndex];
 
+    static PVOID targetProcessAddress = 0;
+
     if (writeOffset > BUFFER_SIZE)
     {
-        DbgPrint("ProcessReceivedCommand: writeOffset (%lu) exceeds BUFFER_SIZE (%lu), skipping command index %lu\n",
+        DebugMessage("ProcessReceivedCommand: writeOffset (%lu) exceeds BUFFER_SIZE (%lu), skipping command index %lu\n",
             writeOffset, BUFFER_SIZE, index);
         return writeOffset;
     }
+
+    //static ULONG_PTR processStart = { 0 };
+    //static ULONG_PTR processEnd = { 0 };
 
     switch (cmd->Type)
     {
     case CMD_MODULE_BASE:
     {
+        //PPEB peb = NULL;
+        //ULONG moduleSize = 0;
+        //peb = PsGetProcessPeb(targetProcess); // targetProcess 是 PEPROCESS
+        //KAPC_STATE apcState;
+        //KeStackAttachProcess(targetProcess, &apcState);
+        //if (peb != NULL)
+        //{
+        //    __try
+        //    {
+        //        ProbeForRead(peb, sizeof(PEB), sizeof(ULONG));
+        //        moduleSize = peb->SizeOfImage; // 主模块大小
+        //    }
+        //    __except (EXCEPTION_EXECUTE_HANDLER)
+        //    {
+        //        DebugMessage("[W11Kernel] CMD_MODULE_BASE: Exception accessing PEB\n");
+        //        moduleSize = 0;
+        //    }
+        //}
+        //else
+        //{
+        //    DebugMessage("[W11Kernel] CMD_MODULE_BASE: PEB is NULL\n");
+        //}
+        //KeUnstackDetachProcess(&apcState);
+
         PVOID baseAddress = PsGetProcessSectionBaseAddress(targetProcess);
 
         PVOID destAddr = buffer + writeOffset;
 
-        //DbgPrint("CMD_MODULE_BASE: baseAddress = 0x%p\n", baseAddress);
-        //DbgPrint("CMD_MODULE_BASE: destAddr = 0x%p, writeOffset = %lu\n", destAddr, writeOffset);
+        //processStart = (ULONG_PTR)baseAddress;
+        //processEnd = (ULONG_PTR)((ULONG_PTR)baseAddress + moduleSize);
+        DebugMessage("CMD_MODULE_BASE_START: baseAddress = 0x%p\n", baseAddress);
+        //DebugMessage("CMD_MODULE_BASE_START: baseAddress = 0x%p\n", (PVOID)processStart);
+        //DebugMessage("CMD_MODULE_BASE_END: baseAddress = 0x%p\n", (PVOID)processEnd);
+        //DebugMessage("CMD_MODULE_BASE: destAddr = 0x%p, writeOffset = %lu\n", destAddr, writeOffset);
+        targetProcessAddress = baseAddress;
 
         RtlCopyMemory(destAddr, &baseAddress, sizeof(baseAddress));
 
@@ -187,57 +234,63 @@ ULONG ProcessReceivedCommand(
     {
         if (cmd->Size == 0)
         {
-            DbgPrint("Invalid size in CMD_READ_MEMORY\n");
+            DebugMessage("Invalid size in CMD_READ_MEMORY\n");
             break;
         }
 
-        if (cmd->Address >= 0x7FFFFFFFFFFF || cmd->Address == 0)   // Address 0 check
-        {
-            DbgPrint("Invalid address detected: 0x%p\n", (PVOID)cmd->Address);
-            return STATUS_INVALID_ADDRESS;
-        }
+        ULONG rawWriteOffset = writeOffset;
+        writeOffset += cmd->Size;
 
         PVOID sourceAddr = NULL;
-        PVOID destAddr = buffer + writeOffset;
-        //DbgPrint("writeOffset : 0x%X\n", writeOffset);
-        //DbgPrint("address : 0x%p\n", (PVOID)cmd->Address);
+        PVOID destAddr = buffer + rawWriteOffset;
+        //DebugMessage("writeOffset : 0x%X\n", rawWriteOffset);
+        //DebugMessage("address : 0x%p\n", (PVOID)cmd->Address);
 
-        if (cmd->Address > 0x100)  // 最多256个包
+        if (cmd->Address > MAX_COMMAND_COUNT)  // 最多512个包
         {
+            if (cmd->Address > MM_USER_PROBE_ADDRESS)
+            {
+                DebugMessage("Invalid address detected from CMD_READ Absolute: 0x%p, i = %lu\n", (PVOID)cmd->Address, index);
+                break;
+            }
+
             sourceAddr = (PVOID)(cmd->Address + cmd->Offset);
         }
         else
         {
             // Address 是 PackOffset，计算真实地址
-            ULONG packOffset = (ULONG)cmd->Address;
-            if (packOffset > 0)
+            ULONG packOffset = cmd->Address;
+            if (packOffset > 0 && packOffset <= pSharedData->CommandPackSize)
             {
                 // 从前一个结果里取地址值
                 PVOID baseAddr = NULL;
                 RtlCopyMemory(
                     &baseAddr,
-                    buffer + GetOffsetOfResult(pSharedData, index, packOffset, writeOffset),
+                    buffer + GetOffsetOfResult(pSharedData, index, packOffset, rawWriteOffset),
                     sizeof(PVOID));
 
-                if (baseAddr >= 0x7FFFFFFFFFFF || baseAddr == 0)
+                if (baseAddr == NULL || (ULONG_PTR)baseAddr > MM_USER_PROBE_ADDRESS)
                 {
-                    DbgPrint("Invalid Pack Offset address detected: 0x%p\n", baseAddr);
-                    return STATUS_INVALID_ADDRESS;
+                    DebugMessage("Invalid address detected from CMD_READ Pack Offset: 0x%p, i = %lu\n", baseAddr, index);
+                    break;
                 }
 
                 sourceAddr = (PVOID)((ULONG_PTR)baseAddr + cmd->Offset);
 
-                /*DbgPrint("CMD_READ_MEMORY: baseAddr = 0x%p, offset = 0x%X, sourceAddr = 0x%p\n",
+                /*DebugMessage("CMD_READ_MEMORY: baseAddr = 0x%p, offset = 0x%X, sourceAddr = 0x%p\n",
                     baseAddr,
                     cmd->Offset,
                     sourceAddr);*/
             }
         }
 
-        UCHAR tempBuffer[8] = { 0 };
+        static UCHAR tempBuffer[0x400] = { 0 };
+        RtlZeroMemory(tempBuffer, sizeof(tempBuffer));
+
+        status = ReadPhysical(targetProcess, (ULONG64)sourceAddr, tempBuffer, cmd->Size, (ULONG64)targetProcessAddress);
 
         // 共享内存是在内核空间，但不属于进程页表里的有效用户或内核页
-        status = MmCopyVirtualMemory(
+        /*status = MmCopyVirtualMemory(
             targetProcess,
             sourceAddr,
             PsGetCurrentProcess(),
@@ -245,19 +298,30 @@ ULONG ProcessReceivedCommand(
             cmd->Size,
             KernelMode,
             &bytes
-        );
+        );*/
 
-        if (NT_SUCCESS(status) && bytes == cmd->Size)
+        //ULONG64 user_cr3 = *(ULONG64*)((PUCHAR)targetProcess + 0x158);
+        //ULONG64 directory_cr3 = *(ULONG64*)((PUCHAR)targetProcess + 0x28);
+
+        //if (user_cr3 != directory_cr3) status = STATUS_TOO_MANY_SECRETS;
+
+        //RtlCopyMemory(buffer + rawWriteOffset, &directory_cr3, cmd->Size);
+
+        //if (NT_SUCCESS(status) && bytes == cmd->Size)
+        if (NT_SUCCESS(status))
         {
             // 安全写回共享内存（用户可映射）
-            RtlCopyMemory(buffer + writeOffset, tempBuffer, cmd->Size);
-            writeOffset += cmd->Size;
+            RtlCopyMemory(buffer + rawWriteOffset, tempBuffer, cmd->Size);
+            //rawWriteOffset += cmd->Size;
         }
         else
         {
-            DbgPrint("MmCopyVirtualMemory failed: 0x%X, requested=%lu\n",
+            DebugMessage("MmCopyVirtualMemory failed: 0x%X, requested=%lu\n",
                 status, cmd->Size);
+
+            RtlCopyMemory(buffer + rawWriteOffset, &status, sizeof(status));
         }
+
         break;
     }
 
@@ -265,27 +329,26 @@ ULONG ProcessReceivedCommand(
     {
         if (cmd->Size == 0 || cmd->Size > sizeof(cmd->Value))
         {
-            DbgPrint("Invalid size in CMD_WRITE_MEMORY\n");
+            DebugMessage("Invalid size in CMD_WRITE_MEMORY\n");
             break;
-        }
-
-        if (cmd->Address >= 0x7FFFFFFFFFFF || cmd->Address == 0)  // Address 0 check
-        {
-            DbgPrint("Invalid address detected: 0x%p\n", (PVOID)cmd->Address);
-            return STATUS_INVALID_ADDRESS;
         }
 
         PVOID sourceAddr = NULL;
         PVOID destAddr = buffer + writeOffset;
-        if (cmd->Address > 0x100)  // 最多256个包
+        if (cmd->Address > MAX_COMMAND_COUNT)  // 最多512个包
         {
+            if (cmd->Address > MM_USER_PROBE_ADDRESS)
+            {
+                DebugMessage("Invalid address detected from CMD_WRITE: 0x%p\n", (PVOID)cmd->Address);
+                break;
+            }
             sourceAddr = (PVOID)(cmd->Address + cmd->Offset);
         }
         else
         {
             // Address 是 PackOffset，计算真实地址
             ULONG packOffset = (ULONG)cmd->Address;
-            if (packOffset > 0)
+            if (packOffset > 0 && packOffset <= pSharedData->CommandPackSize)
             {
                 // 从前一个结果里取地址值
                 PVOID baseAddr = NULL;
@@ -294,7 +357,13 @@ ULONG ProcessReceivedCommand(
                     buffer + GetOffsetOfResult(pSharedData, index, packOffset, writeOffset),
                     sizeof(PVOID));
 
-                /*DbgPrint("CMD_WRITE_MEMORY: baseAddr = 0x%p, offset = 0x%X, sourceAddr = 0x%p\n",
+                if (baseAddr == NULL || (ULONG_PTR)baseAddr > MM_USER_PROBE_ADDRESS)
+                {
+                    DebugMessage("Invalid address detected from CMD_READ Pack Offset: 0x%p, i = %lu\n", baseAddr, index);
+                    break;
+                }
+
+                /*DebugMessage("CMD_WRITE_MEMORY: baseAddr = 0x%p, offset = 0x%X, sourceAddr = 0x%p\n",
                     baseAddr,
                     cmd->Offset,
                     sourceAddr);*/
@@ -318,19 +387,24 @@ ULONG ProcessReceivedCommand(
 
         if (!NT_SUCCESS(status) || bytes != cmd->Size)
         {
-            DbgPrint("Write memory failed: 0x%X\n", status);
+            DebugMessage("Write memory failed: 0x%X\n", status);
         }
         break;
     }
 
-    case CMD_EX_BUFFER:
+    case CMD_FILL_EMPTY:
     {
-        currentWriteBufferIndex = 1;
+        ULONG seed = (ULONG)__rdtsc();
+        for (SIZE_T i = writeOffset; i < cmd->Size; i++)
+        {
+            buffer[i] = (UCHAR)(RtlRandomEx(&seed) & 0xFF);
+        }
+        writeOffset += cmd->Size;
         break;
     }
 
     default:
-        DbgPrint("Unknown command type: %u\n", cmd->Type);
+        DebugMessage("Unknown command type: %u\n", cmd->Type);
         break;
     }
 
@@ -340,21 +414,32 @@ ULONG ProcessReceivedCommand(
 ULONG GetOffsetOfResult(PSHARED_MEMORY_DATA pSharedData, ULONG currentIndex, ULONG packOffset, ULONG writeOffset)
 {
     ULONG previousWriteOffset = writeOffset;
-    DbgPrint("GetOffsetOfResult called: currentIndex=%lu, packOffset=%lu, writeOffset=%lu\n",
+    DebugMessage("GetOffsetOfResult called: currentIndex=%lu, packOffset=%lu, writeOffset=%lu\n",
         currentIndex, packOffset, writeOffset);
 
     if (currentIndex >= packOffset && packOffset != 0)
     {
         for (ULONG i = currentIndex - packOffset; i < currentIndex; i++)
         {
+            COMMAND_TYPE cmdType = pSharedData->commandPacks[i].Type;
+            DecryptField((ULONG*)&cmdType);
+
+            if (!(cmdType == CMD_MODULE_BASE || cmdType == CMD_READ_MEMORY)) continue;
+
             LONG size = pSharedData->commandPacks[i].Size;
             DecryptField(&size);
+
             previousWriteOffset -= size;
-            DbgPrint("  i=%lu, commandSize=%lu, previousWriteOffset=%lu\n",
+            DebugMessage("GetOffsetOfResult:  i=%lu, commandSize=%lu, previousWriteOffset=%lu\n",
                 i, size, previousWriteOffset);
         }
     }
-    DbgPrint("GetOffsetOfResult returning previousWriteOffset=%lu\n", previousWriteOffset);
+    DebugMessage("GetOffsetOfResult returning previousWriteOffset=%lu\n", previousWriteOffset);
+
+    if (previousWriteOffset > writeOffset)
+    {
+        previousWriteOffset = writeOffset;
+    }
 
     return previousWriteOffset;
 }
@@ -375,12 +460,12 @@ VOID ReleaseSharedData(void)
     if (oldData)
     {
         ZwUnmapViewOfSection(NtCurrentProcess(), oldData);
-        DbgPrint("[ReleaseSharedData] Shared memory unmapped in kernel\n");
+        DebugMessage("[ReleaseSharedData] Shared memory unmapped in kernel\n");
     }
     if (oldSection)
     {
         ZwClose(oldSection);
-        DbgPrint("[ReleaseSharedData] Section handle closed\n");
+        DebugMessage("[ReleaseSharedData] Section handle closed\n");
     }
 }
 
@@ -397,14 +482,14 @@ PSHARED_MEMORY_DATA GetSharedDataOnce(void)
         {
             return *pSharedData;
         }
-        DbgPrint("[GetSharedDataOnce] Invalid signature, releasing\n");
+        DebugMessage("[GetSharedDataOnce] Invalid signature, releasing\n");
         ReleaseSharedData();
     }
 
     UNICODE_STRING sectionName;
     WCHAR sharedName[128] = { 0 };
     GenerateSharedMemoryName(sharedName, 128);
-    DbgPrint("[GetSharedDataOnce] Kernel sharedName: %ws\n", sharedName);
+    DebugMessage("[GetSharedDataOnce] Kernel sharedName: %ws\n", sharedName);
     RtlInitUnicodeString(&sectionName, sharedName);
     OBJECT_ATTRIBUTES objAttr;
     InitializeObjectAttributes(&objAttr, &sectionName, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, NULL, NULL);
@@ -413,7 +498,7 @@ PSHARED_MEMORY_DATA GetSharedDataOnce(void)
     NTSTATUS status = ZwOpenSection(&localhSection, SECTION_MAP_READ | SECTION_MAP_WRITE, &objAttr);
     if (!NT_SUCCESS(status))
     {
-        DbgPrint("[GetSharedDataOnce] ERROR: Failed to open section with status 0x%08X\n", status);
+        DebugMessage("[GetSharedDataOnce] ERROR: Failed to open section with status 0x%08X\n", status);
         return NULL;
     }
 
@@ -423,7 +508,7 @@ PSHARED_MEMORY_DATA GetSharedDataOnce(void)
     //ZwClose(localhSection);  // 这里要注释， 不然会被名称会被标记为临时，导致客户端连接不上
     if (!NT_SUCCESS(status) || localMap == NULL)
     {
-        DbgPrint("[GetSharedDataOnce] ERROR: ZwMapViewOfSection failed with status 0x%08X\n", status);
+        DebugMessage("[GetSharedDataOnce] ERROR: ZwMapViewOfSection failed with status 0x%08X\n", status);
         ZwClose(localhSection);
         localhSection = NULL;
         InterlockedExchange(&initialized, 0);
@@ -433,7 +518,7 @@ PSHARED_MEMORY_DATA GetSharedDataOnce(void)
     PSHARED_MEMORY_DATA tempData = (PSHARED_MEMORY_DATA)localMap;
     if (tempData->Signature != EncryptedSignature(SHARED_MEMORY_SIGNATURE))
     {
-        DbgPrint("[GetSharedDataOnce] Invalid shared memory signature, unmapping\n");
+        DebugMessage("[GetSharedDataOnce] Invalid shared memory signature, unmapping\n");
         ZwUnmapViewOfSection(NtCurrentProcess(), localMap);
         ZwClose(localhSection);
         localhSection = NULL;
@@ -444,7 +529,7 @@ PSHARED_MEMORY_DATA GetSharedDataOnce(void)
     status = CopyShadowSSDTToStructure(tempData);
     if (!NT_SUCCESS(status))
     {
-        DbgPrint("[GetSharedDataOnce] ERROR: CopyShadowSSDTToStructure failed with status 0x%08X\n", status);
+        DebugMessage("[GetSharedDataOnce] ERROR: CopyShadowSSDTToStructure failed with status 0x%08X\n", status);
         ZwUnmapViewOfSection(NtCurrentProcess(), localMap);
         ZwClose(localhSection);
         InterlockedExchange(&initialized, 0);
@@ -462,6 +547,6 @@ PSHARED_MEMORY_DATA GetSharedDataOnce(void)
     }
 
     InterlockedExchange(&initialized, 1);
-    DbgPrint("[GetSharedDataOnce] Shared memory successfully connected at: 0x%p\n", localMap);
+    DebugMessage("[GetSharedDataOnce] Shared memory successfully connected at: 0x%p\n", localMap);
     return *pSharedData;
 }

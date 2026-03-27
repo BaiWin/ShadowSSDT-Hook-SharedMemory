@@ -1,4 +1,5 @@
 ﻿#include <ntifs.h>
+#include "Debug.h"
 
 extern NTSTATUS HookShadowSSDT();
 extern NTSTATUS UnhookShadowSSDT();
@@ -15,18 +16,25 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject)
 
     StopWorkerThread();
 
-    DbgPrint("[W11Kernel] Driver unloaded\n");
+    DebugMessage("[W11Kernel] Driver unloaded\n");
 }
 
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 {
-    DbgPrint("Hello from driver!\n");
+    DebugMessage("Hello from driver!\n");
 
     UNREFERENCED_PARAMETER(RegistryPath);
 
-    DriverObject->DriverUnload = DriverUnload;
+    if (DriverObject != NULL)
+    {
+        DriverObject->DriverUnload = DriverUnload;
+    }
+    else
+    {
+        DebugMessage("[W11Kernel] DriverObject is NULL!\n");
+    }
 
-    DbgPrint("[W11Kernel] Driver loaded\n");
+    DebugMessage("[W11Kernel] Driver loaded\n");
 
     //HookShadowSSDT();
 

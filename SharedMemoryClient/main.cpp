@@ -23,9 +23,8 @@ bool OnFrameStart()
     InsertJunkCodeRND();
 
     // Buffer统一解密
-    ULONG dataSize = pSharedData->DataSize;
-    DecryptField((ULONG*)&dataSize);
-    DecryptBuffer(pSharedData->Buffer[pSharedData->currentBufferIndex], dataSize); // 直接作用
+    DecryptField((ULONG*)&pSharedData->DataSize);
+    DecryptBuffer(pSharedData->Buffer[pSharedData->currentBufferIndex], pSharedData->DataSize); // 直接作用
     InsertJunkCode(3);
     return true;
 }
@@ -35,15 +34,18 @@ void OnFrameEnd()
     InsertJunkCodeRND();
     PSHARED_MEMORY_DATA pSharedData = GetSharedDataOnce();
     pSharedData->CommandPackSize = GetSequence();
-
+    if (pSharedData->CommandPackSize >= MAX_COMMAND_COUNT)
+    {
+        std::cout << "Exceed max command size: " << std::dec << pSharedData->CommandPackSize << std::endl;
+    }
+    //std::cout << "TotalCommand Sent: " << std::dec << pSharedData->CommandPackSize << std::endl;
     InsertJunkCodeRND();
     EncryptField(&pSharedData->ClientPid);
     EncryptField(&pSharedData->TargetPid);
-    EncryptField((ULONG*) & pSharedData->CommandPackSize);
+    EncryptField((ULONG*)&pSharedData->CommandPackSize);
     //Buffer恢复
-    ULONG dataSize = pSharedData->DataSize;
-    DecryptField((ULONG*)&dataSize);
-    EncryptBuffer(pSharedData->Buffer[pSharedData->currentBufferIndex], dataSize);  // 恢复
+    EncryptBuffer(pSharedData->Buffer[pSharedData->currentBufferIndex], pSharedData->DataSize);  // 恢复
+    EncryptField((ULONG*)&pSharedData->DataSize);
     InsertJunkCode(1);
 
     MemoryBarrier();
@@ -70,7 +72,7 @@ int main()
 
         // 设置pid,设置 ex buffer
         DWORD clientPid = GetCurrentProcessId();
-        DWORD targetPid = GetProcessID(L"DebugProgram.exe");
+        DWORD targetPid = GetProcessID(L"League of Legends.exe");
 
         //std::cout << (ULONG)clientPid << "  " << (ULONG)targetPid << std::endl;
         PSHARED_MEMORY_DATA pSharedData = GetSharedDataOnce();
@@ -85,6 +87,19 @@ int main()
         MemoryResult<uintptr_t> baseAddress = GetModuleBase(targetPid);
         MemoryResult<int> v1 = Read<int>(baseAddress, 0x5034);
         Write<int>(baseAddress, 0x5034, 100);
+
+        ULONG data_size = 64;
+
+        std::vector<uint8_t> buffer = ReadBuffer(baseAddress, 0x5050, data_size).Value;
+
+        float viewMatrix4x4[16] = { 0 };
+
+        for (int i = 0; i < 16; ++i)
+        {
+            std::memcpy(&viewMatrix4x4[i], &buffer[i * 4], sizeof(float));
+            std::cout << "," << viewMatrix4x4[i];
+        }
+        std::cout << "" << std::endl;
 
         std::cout << "Base Address: " << std::hex << baseAddress.Value << std::endl;
         std::cout << "v1 : " << std::dec << v1.Value << std::endl;

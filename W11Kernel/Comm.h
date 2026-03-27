@@ -11,6 +11,7 @@ extern "C" {
     // 内核模式包含
 #include <ntddk.h>
 #include <wdm.h>
+#include "Debug.h"
 
 // 定义用户态也需要的类型（如果内核已经定义了就不需要重复）
     typedef ULONG_PTR SIZE_T;
@@ -38,7 +39,7 @@ extern "C" {
         const WCHAR* localSuffix = L"A0C39D1B-6B9E-4a63-9E33-2F16F4E4345F";
 
         RtlStringCchPrintfW(buffer, bufferSize, L"%ws%ws", SHARED_MEMORY_NAME, localSuffix);
-        DbgPrint("Kernel sharedName: %ws\n", buffer);
+        DebugMessage("Kernel sharedName: %ws\n", buffer);
     }
 
 #else
@@ -53,10 +54,11 @@ extern "C" {
     }
 #endif
 
-// 共享内存大小
-#define SHARED_MEMORY_SIZE (32 * 1024)  // 16KB，适合大量数据
-#define MAX_COMMAND_COUNT 512           // 支持最多256个命令
-#define BUFFER_SIZE (4 * 1024)          // 每个缓冲区大小
+    // 共享内存大小
+#define SIZE_SCALE 4
+#define SHARED_MEMORY_SIZE (16 * 1024) * SIZE_SCALE  // 16KB，适合大量数据
+#define MAX_COMMAND_COUNT 256 * SIZE_SCALE           // 支持最多256个命令
+#define BUFFER_SIZE (4 * 1024) * SIZE_SCALE         // 每个缓冲区大小
 #define REMAIN_SIZE SHARED_MEMORY_SIZE - ((BUFFER_SIZE * 2) + (28 * MAX_COMMAND_COUNT) + 8 + 20 + 200)
 
 // 魔数签名
@@ -71,7 +73,7 @@ extern "C" {
         CMD_MODULE_BASE = 1,      // 读取基址
         CMD_READ_MEMORY,   // 读取内存
         CMD_WRITE_MEMORY,  // 写入内存
-        CMD_EX_BUFFER        // 双缓冲切换
+        CMD_FILL_EMPTY        // 数据填充
     } COMMAND_TYPE;
 
     // 通用命令结构

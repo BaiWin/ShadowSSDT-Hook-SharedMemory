@@ -124,10 +124,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Comm.c" />
+    <ClCompile Include="CR3Shuffling.c" />
     <ClCompile Include="Disguise.c" />
     <ClCompile Include="DriverEntry.c" />
     <ClCompile Include="HookFunction.h" />
     <ClCompile Include="HookFunction.c" />
+    <ClCompile Include="Local.c" />
     <ClCompile Include="WorkerThread.c" />
     <ClCompile Include="ModuleBase.c" />
     <ClCompile Include="PatternScan.c" />
@@ -137,10 +139,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Comm.h" />
+    <ClInclude Include="CR3Shuffling.h" />
     <ClInclude Include="Disguise.h" />
     <ClInclude Include="Encrypt.h" />
     <ClInclude Include="JunkCode.h" />
     <ClInclude Include="KernelIncludes.h" />
+    <ClInclude Include="Debug.h" />
+    <ClInclude Include="Local.h" />
     <ClInclude Include="WorkerThread.h" />
     <ClInclude Include="ModuleBase.h" />
     <ClInclude Include="PatternScan.h" />

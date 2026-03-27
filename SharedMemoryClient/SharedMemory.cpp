@@ -62,6 +62,7 @@ PSHARED_MEMORY_DATA InitializeSharedMemory()
         (*pSharedData)->TargetPid = 0;
         (*pSharedData)->currentBufferIndex = 0;
         (*pSharedData)->CommandPackSize = 0;
+        EncryptField((ULONG*)&(*pSharedData)->CommandPackSize);
         (*pSharedData)->DataSize = 0;
         EncryptField((ULONG*) & (*pSharedData)->DataSize);
         RtlZeroMemory((*pSharedData)->Buffer[0], BUFFER_SIZE);
@@ -109,6 +110,7 @@ BOOL SendCommandToKernel(COMMAND_PACKET commandPack, int sequence)
     MemoryBarrier();
 
     printf("Data sent to kernel, sequence = %d\n", sequence);
+    printf("Data sent to kernel, type = %d\n", commandPack.Type);
 
     return TRUE;
 }

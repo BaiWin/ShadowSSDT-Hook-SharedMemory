@@ -62,21 +62,21 @@ IMAGE_SECTION_HEADER* GetModuleSectionHeader(PCUNICODE_STRING moduleName, const 
 
     if (!moduleBase)
     {
-        DbgPrint("Failed to find module: %wZ\n", moduleName);
+        DebugMessage("Failed to find module: %wZ\n", moduleName);
         return NULL;
     }
 
     IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)moduleBase;
     if (dos->e_magic != IMAGE_DOS_SIGNATURE)
     {
-        DbgPrint("Invalid DOS signature in module: %wZ\n", moduleName);
+        DebugMessage("Invalid DOS signature in module: %wZ\n", moduleName);
         return NULL;
     }
 
     IMAGE_NT_HEADERS* nt = (IMAGE_NT_HEADERS*)((PUCHAR)moduleBase + dos->e_lfanew);
     if (nt->Signature != IMAGE_NT_SIGNATURE)
     {
-        DbgPrint("Invalid NT signature in module: %wZ\n", moduleName);
+        DebugMessage("Invalid NT signature in module: %wZ\n", moduleName);
         return NULL;
     }
 
@@ -86,13 +86,13 @@ IMAGE_SECTION_HEADER* GetModuleSectionHeader(PCUNICODE_STRING moduleName, const 
     {
         if (strncmp((const char*)sec->Name, sectionName, IMAGE_SIZEOF_SHORT_NAME) == 0)
         {
-            DbgPrint("Found section %s in module %wZ at offset: 0x%X\n",
+            DebugMessage("Found section %s in module %wZ at offset: 0x%X\n",
                 sectionName, moduleName, sec->VirtualAddress);
             return sec;
         }
     }
 
-    DbgPrint("Section %s not found in module %wZ\n", sectionName, moduleName);
+    DebugMessage("Section %s not found in module %wZ\n", sectionName, moduleName);
     return NULL;
 }
 
@@ -114,7 +114,7 @@ PVOID FindFreeChunk(PVOID gapStart, SIZE_T gapSize, SIZE_T chunkSize)
             if (freeCount >= chunkSize)
             {
                 PVOID chunkStart = current; // 当前指针就是chunk的开始
-                DbgPrint("Found chunk at: %p\n", chunkStart);
+                DebugMessage("Found chunk at: %p\n", chunkStart);
                 return chunkStart;
             }
         }
@@ -136,7 +136,7 @@ BOOLEAN IsMemoryFree(PVOID address, SIZE_T size)
         // 通常未使用的内存是全零或特定填充模式
         if (value != 0 && value != 0xCCCCCCCCCCCCCCCC) // 常见的调试填充
         {
-            DbgPrint("IsMemoryFree: Memory at 0x%p+0x%X contains non-free pattern: 0x%llX\n",
+            DebugMessage("IsMemoryFree: Memory at 0x%p+0x%X contains non-free pattern: 0x%llX\n",
                 address, i, value);
             return FALSE;
         }
@@ -192,7 +192,7 @@ BOOLEAN CheckMemoryProtection(PVOID addr, SIZE_T size)
     // 1. 检查地址有效性
     if (!MmIsAddressValid(addr))
     {
-        DbgPrint("CheckMemoryProtection: Address 0x%p is not valid\n", addr);
+        DebugMessage("CheckMemoryProtection: Address 0x%p is not valid\n", addr);
         return FALSE;
     }
 
@@ -203,7 +203,7 @@ BOOLEAN CheckMemoryProtection(PVOID addr, SIZE_T size)
     NTSTATUS status = MyProtectVirtualMemory(&base, &regionSize, PAGE_READWRITE, &oldProtect);
     if (!NT_SUCCESS(status))
     {
-        //DbgPrint("CheckMemoryProtection: Failed to change protection for address 0x%p, status: 0x%X\n", addr, status);
+        //DebugMessage("CheckMemoryProtection: Failed to change protection for address 0x%p, status: 0x%X\n", addr, status);
         //return FALSE;
     }
 
@@ -212,18 +212,18 @@ BOOLEAN CheckMemoryProtection(PVOID addr, SIZE_T size)
     status = MyProtectVirtualMemory(&base, &regionSize, oldProtect, &oldProtect);
     if (!NT_SUCCESS(status))
     {
-        //DbgPrint("CheckMemoryProtection: Warning: Failed to restore protection for address 0x%p, status: 0x%X\n", addr, status);
+        //DebugMessage("CheckMemoryProtection: Warning: Failed to restore protection for address 0x%p, status: 0x%X\n", addr, status);
         // 这里不返回FALSE，因为主要检查已经通过
     }
 
     // 3. 检查内存内容（是否看起来未使用）
     /*if (!IsMemoryFree(addr, size))
     {
-        DbgPrint("CheckMemoryProtection: Memory at 0x%p appears to be in use\n", addr);
+        DebugMessage("CheckMemoryProtection: Memory at 0x%p appears to be in use\n", addr);
         return FALSE;
     }*/
 
-    DbgPrint("CheckMemoryProtection: Memory at 0x%p passed all checks\n", addr);
+    DebugMessage("CheckMemoryProtection: Memory at 0x%p passed all checks\n", addr);
     return TRUE;
 }
 
@@ -277,7 +277,7 @@ PVOID FindKeServiceDescriptorTableShadow()
     ntBase = GetModuleBaseByName(&ntoskrnlName, &ntSize);
     if (!ntBase)
     {
-        DbgPrint("[W11Kernel] Failed to find ntoskrnl base\n");
+        DebugMessage("[W11Kernel] Failed to find ntoskrnl base\n");
         return NULL;
     }
 
@@ -302,14 +302,14 @@ PVOID FindKeServiceDescriptorTableShadow()
 
     if (!match)
     {
-        DbgPrint("[W11Kernel] Failed to find pattern\n");
+        DebugMessage("[W11Kernel] Failed to find pattern\n");
         return NULL;
     }
 
     PUCHAR address = match + 0xD + 0x7; // 跳过 pattern 和 lea 指令
 
-    DbgPrint("[W11Kernel] Calculated address: %p", address);
-    DbgPrint("[W11Kernel] Bytes: %02X %02X %02X", address[0], address[1], address[2]);
+    DebugMessage("[W11Kernel] Calculated address: %p", address);
+    DebugMessage("[W11Kernel] Bytes: %02X %02X %02X", address[0], address[1], address[2]);
 
     if (address[0] == 0x4C && address[1] == 0x8D && address[2] == 0x1D)
     {
@@ -332,7 +332,7 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
     UCHAR* FileData = NULL;
     ULONG syscallIndex = (ULONG)-1;
 
-    DbgPrint("GetSyscallIndex: Start for %s\n", ExportName);
+    DebugMessage("GetSyscallIndex: Start for %s\n", ExportName);
 
 #ifdef SHADOW_SSDT
     RtlInitUnicodeString(&FileName, L"\\SystemRoot\\System32\\win32u.dll");
@@ -346,7 +346,7 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
         FILE_OPEN, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0);
     if (!NT_SUCCESS(Status))
     {
-        DbgPrint("ZwCreateFile failed: 0x%X\n", Status);
+        DebugMessage("ZwCreateFile failed: 0x%X\n", Status);
         return (ULONG)-1;
     }
 
@@ -354,18 +354,18 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
     Status = ZwQueryInformationFile(FileHandle, &IoStatus, &FileInfo, sizeof(FileInfo), FileStandardInformation);
     if (!NT_SUCCESS(Status))
     {
-        DbgPrint("ZwQueryInformationFile failed: 0x%X\n", Status);
+        DebugMessage("ZwQueryInformationFile failed: 0x%X\n", Status);
         ZwClose(FileHandle);
         return (ULONG)-1;
     }
 
     FileSize = FileInfo.EndOfFile.LowPart;
-    DbgPrint("File size: %u bytes\n", FileSize);
+    DebugMessage("File size: %u bytes\n", FileSize);
 
     FileData = (UCHAR*)ExAllocatePoolWithTag(NonPagedPool, FileSize, 'ldNT');
     if (!FileData)
     {
-        DbgPrint("ExAllocatePoolWithTag failed\n");
+        DebugMessage("ExAllocatePoolWithTag failed\n");
         ZwClose(FileHandle);
         return (ULONG)-1;
     }
@@ -375,7 +375,7 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
     ZwClose(FileHandle);
     if (!NT_SUCCESS(Status))
     {
-        DbgPrint("ZwReadFile failed: 0x%X\n", Status);
+        DebugMessage("ZwReadFile failed: 0x%X\n", Status);
         ExFreePoolWithTag(FileData, 'ldNT');
         return (ULONG)-1;
     }
@@ -383,7 +383,7 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)FileData;
     if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE)
     {
-        DbgPrint("Invalid DOS signature: 0x%X\n", pDosHeader->e_magic);
+        DebugMessage("Invalid DOS signature: 0x%X\n", pDosHeader->e_magic);
         ExFreePoolWithTag(FileData, 'ldNT');
         return (ULONG)-1;
     }
@@ -391,7 +391,7 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
     PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)(FileData + pDosHeader->e_lfanew);
     if (pNtHeaders->Signature != IMAGE_NT_SIGNATURE)
     {
-        DbgPrint("Invalid NT signature: 0x%X\n", pNtHeaders->Signature);
+        DebugMessage("Invalid NT signature: 0x%X\n", pNtHeaders->Signature);
         ExFreePoolWithTag(FileData, 'ldNT');
         return (ULONG)-1;
     }
@@ -408,7 +408,7 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
     ULONG ExportDirOffset = RvaToOffset(pNtHeaders, ExportDirRva, FileSize);
     if (ExportDirOffset == ERROR_VALUE)
     {
-        DbgPrint("Export directory offset invalid\n");
+        DebugMessage("Export directory offset invalid\n");
         ExFreePoolWithTag(FileData, 'ldNT');
         return (ULONG)-1;
     }
@@ -422,7 +422,7 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
 
     if (AddrOfFuncsOffset == ERROR_VALUE || AddrOfNameOrdinalsOffset == ERROR_VALUE || AddrOfNamesOffset == ERROR_VALUE)
     {
-        DbgPrint("Export table offsets invalid\n");
+        DebugMessage("Export table offsets invalid\n");
         ExFreePoolWithTag(FileData, 'ldNT');
         return (ULONG)-1;
     }
@@ -445,18 +445,18 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
             ULONG FuncRva = AddrOfFuncs[AddrOfNameOrdinals[i]];
             if (FuncRva >= ExportDirRva && FuncRva < ExportDirRva + ExportDirSize)
             {
-                DbgPrint("Forwarded export, ignoring: %s\n", ExportName);
+                DebugMessage("Forwarded export, ignoring: %s\n", ExportName);
                 continue;
             }
             FuncOffset = RvaToOffset(pNtHeaders, FuncRva, FileSize);
-            DbgPrint("Found function %s at file offset 0x%X\n", ExportName, FuncOffset);
+            DebugMessage("Found function %s at file offset 0x%X\n", ExportName, FuncOffset);
             break;
         }
     }
 
     if (FuncOffset == ERROR_VALUE)
     {
-        DbgPrint("Function %s not found in export table\n", ExportName);
+        DebugMessage("Function %s not found in export table\n", ExportName);
         ExFreePoolWithTag(FileData, 'ldNT');
         return (ULONG)-1;
     }
@@ -469,13 +469,13 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
         if (pFuncCode[i] == 0xB8) // mov eax, imm32
         {
             syscallIndex = *(ULONG*)(pFuncCode + i + 1);
-            DbgPrint("Syscall index for %s is %u\n", ExportName, syscallIndex);
+            DebugMessage("Syscall index for %s is %u\n", ExportName, syscallIndex);
             break;
         }
     }
 
     if (syscallIndex == (ULONG)-1)
-        DbgPrint("Syscall index not found in function %s\n", ExportName);
+        DebugMessage("Syscall index not found in function %s\n", ExportName);
 
     ExFreePoolWithTag(FileData, 'ldNT');
     return syscallIndex;
@@ -490,7 +490,7 @@ ULONG GetSyscallIndex(_In_ PCSTR ExportName)
 //    if (!funcAddr)
 //        return (ULONG)-1;
 //    if (!funcAddr)
-//        DbgPrint("No func Addr\n");
+//        DebugMessage("No func Addr\n");
 //
 //    PUCHAR bytes = (PUCHAR)funcAddr;
 //    if (bytes[0] != 0xB8) // mov eax, imm32

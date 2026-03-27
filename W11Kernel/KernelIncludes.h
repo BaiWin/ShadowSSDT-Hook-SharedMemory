@@ -23,6 +23,9 @@
 #include "Encrypt.h"
 #include "Disguise.h"
 #include "JunkCode.h"
+#include "Debug.h"|
+#include "CR3Shuffling.h"
+#include "Local.h"
 
 #define ERROR_VALUE 0xFFFFFFFF
 #define SHADOW_SSDT

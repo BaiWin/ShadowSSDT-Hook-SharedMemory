@@ -1,11 +1,12 @@
 #include "ClientIncludes.h"
 #include <Tlhelp32.h>
 #include <iostream>
+#include <vector>
 
 int BufferReadStart = 0;
 std::atomic<int> g_CommandSeq{-1};
 
-MemoryResult<uintptr_t> GetModuleBase(int pid)
+MemoryResult<uintptr_t> GetModuleBase(ULONG pid)
 {
 	int currentSeq = CommandSequenceGenerator();
 
@@ -16,8 +17,6 @@ MemoryResult<uintptr_t> GetModuleBase(int pid)
 	cmd.Value = 0;
 	cmd.Size = sizeof(uintptr_t);
 
-	printf("Send: Type=%d, Address=0x%p, Size=%llu\n", cmd.Type, (void*)cmd.Address, cmd.Size);
-
 	SendCommandToKernel(cmd, currentSeq);
 
 	MemoryResult<uintptr_t> result{};
@@ -26,14 +25,68 @@ MemoryResult<uintptr_t> GetModuleBase(int pid)
 	return result;
 }
 
-void ExchangeBuffer()
+MemoryResult<std::vector<uint8_t>> ReadBufferAbsolute(uintptr_t address, uintptr_t offset, ULONG dataSize)
 {
+	int currentSeq = CommandSequenceGenerator();
+
 	COMMAND_PACKET cmd;
-	cmd.Type = CMD_EX_BUFFER;
+	cmd.Type = CMD_READ_MEMORY;
+	cmd.Address = address;
+	cmd.Offset = offset;
+	cmd.Size = dataSize;
+	cmd.Value = 0;
+
+	SendCommandToKernel(cmd, currentSeq);
+
+	MemoryResult<std::vector<uint8_t>> result{};
+	result.Value = ProcessSingleResult<std::vector<uint8_t>>(&BufferReadStart, dataSize); // 得到 T
+	result.Sequence = currentSeq;                      // 保存序号
+	return result;
+}
+
+MemoryResult<std::vector<uint8_t>> ReadBuffer(const MemoryResult<uintptr_t>& base, uintptr_t offset, ULONG dataSize)
+{
+	int currentSeq = CommandSequenceGenerator();
+
+	int packOffset = currentSeq - base.Sequence;
+
+	COMMAND_PACKET cmd;
+	cmd.Type = CMD_READ_MEMORY;
+	cmd.Address = packOffset;   // 表示是包偏移
+	cmd.Offset = offset;
+	cmd.Size = dataSize;
+	cmd.Value = 0;
+
+	SendCommandToKernel(cmd, currentSeq);
+
+	MemoryResult<std::vector<uint8_t>> result{};
+	result.Value = ProcessSingleResult<std::vector<uint8_t>>(&BufferReadStart, dataSize); // 得到 T
+	result.Sequence = currentSeq;                      // 保存序号
+	return result;
+}
+
+void IncrementStartBySize(int* start, int size)
+{
+	*start += size;
+}
+
+int FillChunkToSize(int size)
+{
+	int currentSeq = CommandSequenceGenerator();
+	int sizeToFill = BufferReadStart - size;
+
+	COMMAND_PACKET cmd;
+	cmd.Type = CMD_FILL_EMPTY;
 	cmd.Address = 0;
 	cmd.Offset = 0;
-	cmd.Size = 0;
+	cmd.Size = sizeToFill;
 	cmd.Value = 0;
+
+	SendCommandToKernel(cmd, currentSeq);
+
+	IncrementStartBySize(&BufferReadStart, sizeToFill);
+
+	return currentSeq;
 }
 
 DWORD GetProcessID(const wchar_t* processName)

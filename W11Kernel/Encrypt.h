@@ -31,6 +31,8 @@ __forceinline void DecryptField64(PVOID* field)
 
 __forceinline void EncryptBuffer(UCHAR* buffer, ULONG size)
 {
+    if (size > BUFFER_SIZE) return;
+
     const UCHAR* keyBytes = (const UCHAR*)&XOR_KEY; // 密钥字节数组 [0xEF, 0xBE, 0xAD, 0xDE] (小端字节序)
     for (ULONG i = 0; i < size; i++)
     {
